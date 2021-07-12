@@ -12,30 +12,30 @@ import com.scalac.github_challenge.service.model.Failures.{ContributorNotFound, 
 
 class Controller(contributionService: DevContributionService) extends SprayJsonSupport {
 
-  val routes =
-    path("orgs") {
+  val routes = pathPrefix("org") {
+    parameter("limit".as[Option[Int]]) { (limit)=>
       get {
-        onComplete(contributionService.getOrganizations(None)) {
+        onComplete(contributionService.getOrganizations(limit)) {
           case Success(Right(result))=>
             complete(StatusCodes.OK)
           case Failure(exception: Exception)=>
             complete(StatusCodes.InternalServerError)
         }
-      }
-    } ~
-    path("orgs" / Segment / "contributors") { orgName=>
-      get {
-        onComplete(contributionService.getContributors(Organization(orgName), None)) {
-          case Success(Right(result))=>
-            complete(StatusCodes.OK)
-          case Success(Left(OrganizationNotFound(name)))=>
-            complete(StatusCodes.NotFound )
-          case Failure(exception: Exception)=>
-            complete(StatusCodes.InternalServerError)
+      } ~
+      path(Segment / "contributors") { orgName=>
+        get {
+          onComplete(contributionService.getContributors(Organization(orgName), limit)) {
+            case Success(Right(result))=>
+              complete(StatusCodes.OK)
+            case Success(Left(OrganizationNotFound(name)))=>
+              complete(StatusCodes.NotFound )
+            case Failure(exception: Exception)=>
+              complete(StatusCodes.InternalServerError)
+          }
         }
       }
     } ~
-    path("orgs" / Segment / "contributors" / Segment) { (orgName, devName)=>
+    path(Segment / "contributors" / Segment) { (orgName, devName)=>
       get {
         onComplete(contributionService.getContributions(Contributor(devName), Organization(orgName))) {
           case Success(Right(result))=>
@@ -47,8 +47,8 @@ class Controller(contributionService: DevContributionService) extends SprayJsonS
           case Failure(exception: Exception)=>
             complete(StatusCodes.InternalServerError)
         }
-
       }
     }
+  }
 
 }
