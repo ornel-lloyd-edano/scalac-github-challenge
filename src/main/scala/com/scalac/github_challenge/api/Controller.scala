@@ -3,6 +3,7 @@ package com.scalac.github_challenge.api
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import com.scalac.github_challenge.api.format.JsonFormat
 import com.scalac.github_challenge.service.DevContributionService
 import com.scalac.github_challenge.service.model.{Contributor, Organization}
@@ -14,17 +15,19 @@ import com.scalac.github_challenge.mapping.Implicits._
 class Controller(contributionService: DevContributionService) extends JsonFormat with SprayJsonSupport {
   import spray.json._
 
-  val routes = pathPrefix("org") {
-    parameter("limit".as[Option[Int]]) { (limit)=>
-      get {
-        onComplete(contributionService.getOrganizations(limit)) {
-          case Success(Right(result))=>
-            complete(StatusCodes.OK, HttpEntity(ContentTypes.`application/json`, result.map(_.name).toJson.prettyPrint))
-          case Failure(exception: Exception)=>
-            complete(StatusCodes.InternalServerError, exception.getMessage)
+  val routes: Route =
+    parameter('limit.as[Int].optional) { (limit: Option[Int])=>
+      path("orgs") {
+        get {
+          onComplete(contributionService.getOrganizations(limit)) {
+            case Success(Right(result))=>
+              complete(StatusCodes.OK, HttpEntity(ContentTypes.`application/json`, result.map(_.name).toJson.prettyPrint))
+            case Failure(exception: Exception)=>
+              complete(StatusCodes.InternalServerError, exception.getMessage)
+          }
         }
       } ~
-      path(Segment / "contributors") { orgName=>
+      path("orgs" / Segment / "contributors") { orgName=>
         get {
           onComplete(contributionService.getContributors(Organization(orgName), limit)) {
             case Success(Right(result))=>
@@ -37,7 +40,7 @@ class Controller(contributionService: DevContributionService) extends JsonFormat
         }
       }
     } ~
-    path(Segment / "contributors" / Segment) { (orgName, devName)=>
+    path("orgs" / Segment / "contributors" / Segment) { (orgName, devName)=>
       get {
         onComplete(contributionService.getContributions(Contributor(devName), Organization(orgName))) {
           case Success(Right(result))=>
@@ -51,6 +54,5 @@ class Controller(contributionService: DevContributionService) extends JsonFormat
         }
       }
     }
-  }
 
 }
