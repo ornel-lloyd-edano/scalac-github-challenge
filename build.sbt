@@ -9,6 +9,7 @@ val akkaHttpVersion = "10.2.4"
 val scalaTestVersion = "3.0.5"
 
 libraryDependencies ++= Seq(
+  "com.typesafe" % "config" % "1.4.1",
   "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
   "com.typesafe.akka" %% "akka-stream" % akkaVersion,
   "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
