@@ -10,7 +10,7 @@ object ExecutionContexts extends ExecutionContextProvider {
     override def execute(runnable: Runnable): Unit = threadPool.submit(runnable)
     override def reportFailure(cause: Throwable): Unit = cause.printStackTrace()
   }
-  val cpuBoundExecutionContext = getFixedThreadPoolExecutionContext(4)
-  val ioBoundExecutionContext = getFixedThreadPoolExecutionContext(12)
-  val eventLoopExecutionContext = getFixedThreadPoolExecutionContext(1)
+  val cpuBoundExCtx = getFixedThreadPoolExecutionContext(4)
+  val ioBoundExCtx = getFixedThreadPoolExecutionContext(12)
+  val eventLoopExCtx = getFixedThreadPoolExecutionContext(1)
 }
