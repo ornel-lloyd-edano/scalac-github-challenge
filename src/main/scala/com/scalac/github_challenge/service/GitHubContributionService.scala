@@ -11,6 +11,8 @@ import com.scalac.github_challenge.service.model.{Contribution, Contributor, Git
 import com.scalac.github_challenge.util.{ConfigProvider, ExecutionContextProvider, Logging}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.headers.RawHeader
+import scala.collection.immutable
 import spray.json._
 
 class GitHubContributionService(ecProvider: ExecutionContextProvider, config: ConfigProvider)(implicit actorSystem: ActorSystem)
@@ -25,15 +27,19 @@ class GitHubContributionService(ecProvider: ExecutionContextProvider, config: Co
       .replace("{org}", org.name)
     .replace("{repo}", repo.name)
 
+  private val requestHeaders = config.getStringConfigVal("github.auth-token")
+    .map(token=> immutable.Seq(RawHeader("Authorization", s"Bearer $token")))
+    .getOrElse(immutable.Seq.empty)
+
+
   override def getOrganizations(limit: Option[Int]): Future[Either[ServiceFailure, Seq[Organization]]] = {
     val uri = gitHubOrganizationsUrl + limit.map(lim=> s"?per_page=$lim").getOrElse("")
-
-    Http().singleRequest(HttpRequest(uri = uri))
+    Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
       .flatMap {
         case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
           Unmarshal(response).to[JsArray].map {
             result=>
-             Right(result.convertTo[Seq[GitHubOrg]].map(githubOrg=> Organization(githubOrg.login)))
+             Right(result.convertTo[Seq[GitHubOrg]].map(githubOrg=> Organization(githubOrg.login)).sorted)
           }(ecProvider.cpuBoundExCtx)
         case response=>
           logger.error(s"${Unmarshal(response).to[String]}")
@@ -44,12 +50,12 @@ class GitHubContributionService(ecProvider: ExecutionContextProvider, config: Co
 
   override def getRepos(organization: Organization, limit: Option[Int]): Future[Either[ServiceFailure, Seq[Repository]]] = {
     val uri = gitHubReposUri(organization) + limit.map(lim=> s"?per_page=$lim").getOrElse("")
-    Http().singleRequest(HttpRequest(uri = uri))
+    Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
       .flatMap {
         case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
           Unmarshal(response).to[JsArray].map {
             result=>
-              Right(result.convertTo[Seq[GitHubRepo]].map(githubRepo=> Repository(githubRepo.name)))
+              Right(result.convertTo[Seq[GitHubRepo]].map(githubRepo=> Repository(githubRepo.name)).sorted)
           }(ecProvider.cpuBoundExCtx)
         case response=>
           logger.error(s"${Unmarshal(response).to[String]}")
@@ -63,7 +69,7 @@ class GitHubContributionService(ecProvider: ExecutionContextProvider, config: Co
       case Right(repositories)=>
         val calls: Seq[Future[Either[ExternalCallError, Seq[Contribution]]]] = repositories.map { repo=>
           val uri = gitHubContributorsUri(organization, repo)
-          Http().singleRequest(HttpRequest(uri = uri))
+          Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
             .flatMap {
               case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
                 Unmarshal(response).to[JsArray].map {
