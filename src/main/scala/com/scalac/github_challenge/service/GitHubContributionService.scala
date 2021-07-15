@@ -1,6 +1,5 @@
 package com.scalac.github_challenge.service
 
-import akka.actor.ActorSystem
 
 import scala.concurrent.Future
 import com.scalac.github_challenge.api
@@ -9,7 +8,7 @@ import com.scalac.github_challenge.service.model.{Contribution, Contributor, Git
 import com.scalac.github_challenge.util.{AsyncHttpClient, ConfigProvider, ExecutionContextProvider, Logging}
 import spray.json._
 
-class GitHubContributionService(httpClient: AsyncHttpClient, config: ConfigProvider)(implicit ecProvider: ExecutionContextProvider, actorSystem: ActorSystem)
+class GitHubContributionService(httpClient: AsyncHttpClient, config: ConfigProvider)(implicit ecProvider: ExecutionContextProvider)
   extends DevContributionService with api.format.JsonFormat with Logging {
 
   private val gitHubOrganizationsUrl = config.getStringConfigVal("github.organizations.url").getOrElse("/github/orgs")

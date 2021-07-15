@@ -21,3 +21,5 @@ libraryDependencies ++= Seq(
   "org.scalamock" %% "scalamock" % "5.1.0" % Test,
   "ch.qos.logback" % "logback-classic" % "1.1.3" % Runtime
 )
+
+parallelExecution in Test := true
