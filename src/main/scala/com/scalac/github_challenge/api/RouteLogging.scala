@@ -14,7 +14,7 @@ import scala.concurrent.duration._
 
 trait RouteLogging {
   implicit val mat: Materializer
-  protected def responseTimeLoggingFunction(loggingAdapter: LoggingAdapter,
+  protected def requestResponseLogger(loggingAdapter: LoggingAdapter,
                                       level: LogLevel = Logging.InfoLevel)(request: HttpRequest)(response: RouteResult): Unit = {
     val entry = response match {
       case Complete(resp) =>
@@ -30,7 +30,7 @@ trait RouteLogging {
   }
 
   def logRequestResponse: Directive0 = {
-    DebuggingDirectives.logRequestResult(LoggingMagnet(responseTimeLoggingFunction(_)))
+    DebuggingDirectives.logRequestResult(LoggingMagnet(requestResponseLogger(_)))
   }
 
   protected def entityAsString(entity: HttpEntity): String = {
