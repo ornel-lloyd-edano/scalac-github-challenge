@@ -1,21 +1,15 @@
 package com.scalac.github_challenge.service
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 
 import scala.concurrent.Future
 import com.scalac.github_challenge.api
 import com.scalac.github_challenge.service.model.Failures._
 import com.scalac.github_challenge.service.model.{Contribution, Contributor, GitHubContributor, GitHubOrg, GitHubRepo, Organization, Repository}
-import com.scalac.github_challenge.util.{ConfigProvider, ExecutionContextProvider, Logging}
-import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import akka.http.scaladsl.model.headers.RawHeader
-import scala.collection.immutable
+import com.scalac.github_challenge.util.{AsyncHttpClient, ConfigProvider, ExecutionContextProvider, Logging}
 import spray.json._
 
-class GitHubContributionService(ecProvider: ExecutionContextProvider, config: ConfigProvider)(implicit actorSystem: ActorSystem)
+class GitHubContributionService(httpClient: AsyncHttpClient, config: ConfigProvider)(implicit ecProvider: ExecutionContextProvider, actorSystem: ActorSystem)
   extends DevContributionService with api.format.JsonFormat with Logging {
 
   private val gitHubOrganizationsUrl = config.getStringConfigVal("github.organizations.url").getOrElse("/github/orgs")
@@ -27,64 +21,48 @@ class GitHubContributionService(ecProvider: ExecutionContextProvider, config: Co
       .replace("{org}", org.name)
     .replace("{repo}", repo.name)
 
-  private val requestHeaders = config.getStringConfigVal("github.auth-token")
-    .map(token=> immutable.Seq(RawHeader("Authorization", s"Bearer $token")))
-    .getOrElse(immutable.Seq.empty)
+  val reqHeaders: Map[String, String] = config.getStringConfigVal("github.auth-token")
+    .map(token=> Map(("Authorization", s"Bearer $token")))
+    .getOrElse(Map.empty)
 
+  val genericFailure = (errorMsg:String) => {
+    ExternalCallError(errorMsg)
+  }
 
   override def getOrganizations(limit: Option[Int]): Future[Either[ServiceFailure, Seq[Organization]]] = {
     val uri = gitHubOrganizationsUrl + limit.map(lim=> s"?per_page=$lim").getOrElse("")
-    Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
-      .flatMap {
-        case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
-          Unmarshal(response).to[JsArray].map {
-            result=>
-             Right(result.convertTo[Seq[GitHubOrg]].map(githubOrg=> Organization(githubOrg.login)).sorted)
-          }(ecProvider.cpuBoundExCtx)
-        case response=>
-          logger.error(s"${Unmarshal(response).to[String]}")
-          Future.successful(Left(ExternalCallError(s"Unexpected error from [$uri].")))
 
-      }(ecProvider.ioBoundExCtx)
+    val success = (result: JsValue)=> {
+      result.convertTo[Seq[GitHubOrg]].map(githubOrg=> Organization(githubOrg.login)).sortBy(_.name)
+    }
+
+    httpClient.getRequest[ServiceFailure, Seq[Organization]](uri = uri, headers = reqHeaders)(success, genericFailure)
   }
 
   override def getRepos(organization: Organization, limit: Option[Int]): Future[Either[ServiceFailure, Seq[Repository]]] = {
     val uri = gitHubReposUri(organization) + limit.map(lim=> s"?per_page=$lim").getOrElse("")
-    Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
-      .flatMap {
-        case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
-          Unmarshal(response).to[JsArray].map {
-            result=>
-              Right(result.convertTo[Seq[GitHubRepo]].map(githubRepo=> Repository(githubRepo.name)).sorted)
-          }(ecProvider.cpuBoundExCtx)
-        case response=>
-          logger.error(s"${Unmarshal(response).to[String]}")
-          Future.successful(Left(ExternalCallError(s"Unexpected error from [$uri].")))
 
-      }(ecProvider.ioBoundExCtx)
+    val success = (result: JsValue)=> {
+      result.convertTo[Seq[GitHubRepo]].map(githubRepo=> Repository(githubRepo.name)).sortBy(_.name)
+    }
+
+    httpClient.getRequest[ServiceFailure, Seq[Repository]](uri = uri, headers = reqHeaders)(success, genericFailure)
   }
 
   override def getContributors(organization: Organization, numRepos: Option[Int]): Future[Either[ServiceFailure, Seq[Contribution]]] = {
     getRepos(organization, numRepos).flatMap {
       case Right(repositories)=>
-        val calls: Seq[Future[Either[ExternalCallError, Seq[Contribution]]]] = repositories.map { repo=>
+        val calls = repositories.map { repo =>
           val uri = gitHubContributorsUri(organization, repo)
-          Http().singleRequest(HttpRequest(uri = uri, headers = requestHeaders))
-            .flatMap {
-              case response @ HttpResponse(StatusCodes.OK, _, _, _)=>
-                Unmarshal(response).to[JsArray].map {
-                  result=>
-                    Right(result.convertTo[Seq[GitHubContributor]]
-                      .map(contrib=> Contribution(Contributor(contrib.login), organization, contrib.contributions)))
-                }(ecProvider.cpuBoundExCtx)
-              case response=>
-                logger.error(s"${Unmarshal(response).to[String]}")
-                Future.successful(Left(ExternalCallError(s"Unexpected error from [$uri].")))
 
-            }(ecProvider.ioBoundExCtx)
+          val success = (result: JsValue) => {
+            result.convertTo[Seq[GitHubContributor]]
+              .map(contrib => Contribution(Contributor(contrib.login), organization, contrib.contributions))
+          }
+          httpClient.getRequest[ServiceFailure, Seq[Contribution]](uri = uri, headers = reqHeaders)(success, genericFailure)
         }
 
-        implicit val ecOnlyHere = ecProvider.cpuBoundExCtx
+        implicit val ecHere = ecProvider.cpuBoundExCtx
         Future.sequence(calls).map { futureResult=>
           futureResult.find(_.isLeft) match {
             case Some(failure)=>
@@ -98,9 +76,9 @@ class GitHubContributionService(ecProvider: ExecutionContextProvider, config: Co
               Right(contributions)
           }
         }
+
       case Left(failure)=> Future.successful(Left(failure))
     }(ecProvider.cpuBoundExCtx)
-
   }
 
 }
