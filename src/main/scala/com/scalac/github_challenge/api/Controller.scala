@@ -4,6 +4,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
+import akka.stream.Materializer
 import com.scalac.github_challenge.api.format.JsonFormat
 import com.scalac.github_challenge.service.DevContributionService
 import com.scalac.github_challenge.service.model.Organization
@@ -11,11 +12,12 @@ import com.scalac.github_challenge.service.model.Organization
 import scala.util.{Failure, Success}
 import com.scalac.github_challenge.service.model.Failures.{ExternalCallError, OrganizationNotFound}
 import com.scalac.github_challenge.mapping.Implicits._
+import com.scalac.github_challenge.util.ExecutionContextProvider
 
-class Controller(contributionService: DevContributionService) extends JsonFormat with SprayJsonSupport {
+class Controller(contributionService: DevContributionService)(implicit val mat: Materializer) extends JsonFormat with SprayJsonSupport with RouteLogging {
   import spray.json._
 
-  val routes: Route =
+  val routes: Route = logRequestResponse {
     parameter('limit.as[Int].optional) { (limit: Option[Int])=>
       path("orgs") {
         get {
@@ -61,6 +63,7 @@ class Controller(contributionService: DevContributionService) extends JsonFormat
         }
       }
     }
+  }
   }
 
 }
