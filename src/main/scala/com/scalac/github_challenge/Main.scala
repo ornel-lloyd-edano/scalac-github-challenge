@@ -12,7 +12,7 @@ object Main extends App {
   implicit val mat = Materializer
   implicit val ec = ExecutionContexts
   val controller = new Controller(new GitHubContributionService(new AkkaHttpClient, Configs))
-  Http().newServerAt("localhost", 8080).bind(controller.routes)
+  Http().newServerAt("localhost", 8080).bind(controller.allRoutes)
 
   sys.addShutdownHook(system.terminate())
 }

@@ -23,7 +23,7 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
   "Controller" should "respond with a list of organizations" in {
     val mockOrgs = Seq("Google", "Apple", "Microsoft", "Netflix", "Oracle", "Scalac").map(Organization(_))
     (mockContributionService.getOrganizations _).expects(None).returning(Future.successful(Right(mockOrgs)))
-    Get("/orgs") ~> controller.routes ~> check {
+    Get("/orgs") ~> controller.allRoutes ~> check {
       status should be (StatusCodes.OK)
       val expected =
         s"""
@@ -36,7 +36,7 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
   "Controller" should "respond with a list of organizations with limit param" in {
     val mockOrgs = Seq("Google", "Apple", "Microsoft", "Netflix", "Oracle", "Scalac").map(Organization(_))
     (mockContributionService.getOrganizations _).expects(Some(3)).returning(Future.successful(Right(mockOrgs.take(3))))
-    Get("/orgs?limit=3") ~> controller.routes ~> check {
+    Get("/orgs?limit=3") ~> controller.allRoutes ~> check {
       status should be (StatusCodes.OK)
       val expected =
         s"""
@@ -50,7 +50,7 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
     (mockContributionService.getContributors (_: Organization, _: Option[Int]))
       .expects(Organization("microscope"), None).returning(Future.successful(Left(Failures.OrganizationNotFound("microscope"))))
 
-    Get("/orgs/microscope/contributors") ~> controller.routes ~> check {
+    Get("/orgs/microscope/contributors") ~> controller.allRoutes ~> check {
       status should be (StatusCodes.NotFound)
       val expected = "Organization [microscope] was not found."
       entityAs[String] should be (expected)
@@ -62,7 +62,7 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
     (mockContributionService.getRepos (_: Organization, _: Option[Int]))
       .expects(Organization("microsoft"), None).returning(Future.successful(Right(mockRepos)))
 
-    Get("/orgs/microsoft/repos") ~> controller.routes ~> check {
+    Get("/orgs/microsoft/repos") ~> controller.allRoutes ~> check {
       status should be (StatusCodes.OK)
       val expected =
         s"""
@@ -82,7 +82,7 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
     (mockContributionService.getContributors (_: Organization, _: Option[Int]))
       .expects(Organization("microsoft"), None).returning(Future.successful(Right(mockContributors)))
 
-    Get("/orgs/microsoft/contributors") ~> controller.routes ~> check {
+    Get("/orgs/microsoft/contributors") ~> controller.allRoutes ~> check {
       status should be (StatusCodes.OK)
       val expected =
         s"""

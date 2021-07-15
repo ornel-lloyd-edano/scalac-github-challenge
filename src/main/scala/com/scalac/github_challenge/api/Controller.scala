@@ -2,22 +2,20 @@ package com.scalac.github_challenge.api
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
-import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
 import com.scalac.github_challenge.api.format.JsonFormat
 import com.scalac.github_challenge.service.DevContributionService
 import com.scalac.github_challenge.service.model.Organization
-
-import scala.util.{Failure, Success}
 import com.scalac.github_challenge.service.model.Failures.{ExternalCallError, OrganizationNotFound}
 import com.scalac.github_challenge.mapping.Implicits._
-import com.scalac.github_challenge.util.ExecutionContextProvider
+import scala.util.{Failure, Success}
 
-class Controller(contributionService: DevContributionService)(implicit val mat: Materializer) extends JsonFormat with SprayJsonSupport with RouteLogging {
+class Controller(contributionService: DevContributionService)(implicit val mat: Materializer)
+  extends JsonFormat with SprayJsonSupport with RouteLogging with DocumentedController  {
   import spray.json._
 
-  val getOrganizationsRoute: Route = parameter('limit.as[Int].optional) { (limit: Option[Int])=>
+  override def getOrganizationsRoute: Route = parameter('limit.as[Int].optional) { (limit: Option[Int])=>
     path("orgs") {
       get {
         onComplete(contributionService.getOrganizations(limit)) {
@@ -32,7 +30,7 @@ class Controller(contributionService: DevContributionService)(implicit val mat: 
     }
   }
 
-  val getReposRoute: Route = path("orgs" / Segment / "repos") { orgName=>
+  override def getReposRoute: Route = path("orgs" / Segment / "repos") { orgName=>
     parameter('limit.as[Int].optional) { (limit: Option[Int])=>
       get {
         onComplete(contributionService.getRepos(Organization(orgName), limit)) {
@@ -49,7 +47,7 @@ class Controller(contributionService: DevContributionService)(implicit val mat: 
     }
   }
 
-  val getContributorsRoute: Route = path("orgs" / Segment / "contributors") { orgName=>
+  def getContributorsRoute: Route = path("orgs" / Segment / "contributors") { orgName=>
     parameter('num_repos.as[Int].optional) { (numRepos: Option[Int])=>
       get {
         onComplete(contributionService.getContributors(Organization(orgName), numRepos)) {
@@ -66,8 +64,8 @@ class Controller(contributionService: DevContributionService)(implicit val mat: 
     }
   }
 
-  val routes: Route = logRequestResponse {
-    getOrganizationsRoute ~ getReposRoute ~ getContributorsRoute
+  val allRoutes: Route = logRequestResponse {
+    getOrganizationsRoute ~ getReposRoute ~ getContributorsRoute ~ documentationRoutes
   }
 
 }
