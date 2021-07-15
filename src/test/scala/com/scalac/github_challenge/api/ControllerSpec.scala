@@ -8,7 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.StatusCodes
-import com.scalac.github_challenge.service.model.{Contribution, Contributor, Failures, Organization}
+import com.scalac.github_challenge.service.model.{Contribution, Contributor, Failures, Organization, Repository}
 import spray.json._
 
 import scala.concurrent.Future
@@ -46,21 +46,6 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
     }
   }
 
-  "Controller" should "respond with a list of contributors under an organization" in {
-    val mockContributors = Seq("Bill", "Larry", "Zuck", "Elon", "Jeff", "Steve").map(Contributor(_))
-    (mockContributionService.getContributors (_: Organization, _: Option[Int]))
-      .expects(Organization("microsoft"), None).returning(Future.successful(Right(mockContributors)))
-
-    Get("/orgs/microsoft/contributors") ~> controller.routes ~> check {
-      status should be (StatusCodes.OK)
-      val expected =
-        s"""
-           |["Bill", "Larry", "Zuck", "Elon", "Jeff", "Steve"]
-           |""".stripMargin.parseJson
-      entityAs[JsValue] should be (expected)
-    }
-  }
-
   "Controller" should "respond with 404 NotFound if an organization is not found" in {
     (mockContributionService.getContributors (_: Organization, _: Option[Int]))
       .expects(Organization("microscope"), None).returning(Future.successful(Left(Failures.OrganizationNotFound("microscope"))))
@@ -72,44 +57,41 @@ class ControllerSpec extends AnyFlatSpec with Matchers with MockFactory with Sca
     }
   }
 
-  "Controller" should "respond with a list of contributors under an organization with limit param" in {
-    val mockContributors = Seq("Bill", "Larry", "Zuck", "Elon", "Jeff", "Steve").map(Contributor(_))
+  "Controller" should "respond with a list of repos" in {
+    val mockRepos = Seq("repo1", "repo2", "repo3", "repo4").map(Repository)
+    (mockContributionService.getRepos (_: Organization, _: Option[Int]))
+      .expects(Organization("microsoft"), None).returning(Future.successful(Right(mockRepos)))
+
+    Get("/orgs/microsoft/repos") ~> controller.routes ~> check {
+      status should be (StatusCodes.OK)
+      val expected =
+        s"""
+           |["repo1", "repo2", "repo3", "repo4"]
+           |""".stripMargin.parseJson
+      entityAs[JsValue] should be (expected)
+    }
+  }
+
+  "Controller" should "respond with a list of contributors under a given organization" in {
+    val mockContributors = Seq(
+      Contribution(Contributor("Bill"), Organization("microsoft"), 999),
+      Contribution(Contributor("Steve"), Organization("microsoft"), 200),
+      Contribution(Contributor("Zuck"), Organization("microsoft"), 60),
+      Contribution(Contributor("Buffet"), Organization("microsoft"), 10)
+    )
     (mockContributionService.getContributors (_: Organization, _: Option[Int]))
-      .expects(Organization("microsoft"), Some(3)).returning(Future.successful(Right(mockContributors.take(3))))
+      .expects(Organization("microsoft"), None).returning(Future.successful(Right(mockContributors)))
 
-    Get("/orgs/microsoft/contributors?limit=3") ~> controller.routes ~> check {
+    Get("/orgs/microsoft/contributors") ~> controller.routes ~> check {
       status should be (StatusCodes.OK)
       val expected =
         s"""
-           |["Bill", "Larry", "Zuck"]
+           |[{"name": "Bill", "contributions": 999},
+           |{"name": "Steve", "contributions": 200},
+           |{"name": "Zuck", "contributions": 60},
+           |{"name": "Buffet", "contributions": 10}]
            |""".stripMargin.parseJson
       entityAs[JsValue] should be (expected)
-    }
-  }
-
-  "Controller" should "respond with a contributions of a contributor under an organization" in {
-    val mockContribution = Contribution(Contributor("Bill"), Some(Organization("microsoft")), 999)
-    (mockContributionService.getContributions (_: Contributor, _: Organization))
-      .expects(Contributor("Bill"), Organization("microsoft")).returning(Future.successful(Right(mockContribution)))
-
-    Get("/orgs/microsoft/contributors/Bill") ~> controller.routes ~> check {
-      status should be (StatusCodes.OK)
-      val expected =
-        s"""
-           |{"name": "Bill", "contributions": 999}
-           |""".stripMargin.parseJson
-      entityAs[JsValue] should be (expected)
-    }
-  }
-
-  "Controller" should "respond with 404 NotFound if a contributor is not found" in {
-    (mockContributionService.getContributions (_: Contributor, _: Organization))
-      .expects(Contributor("Buffet"), Organization("microsoft")).returning(Future.successful(Left(Failures.ContributorNotFound("Buffet"))))
-
-    Get("/orgs/microsoft/contributors/Buffet") ~> controller.routes ~> check {
-      status should be (StatusCodes.NotFound)
-      val expected = "Contributor [Buffet] was not found."
-      entityAs[String] should be (expected)
     }
   }
 
